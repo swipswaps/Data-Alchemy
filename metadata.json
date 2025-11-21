@@ -1,0 +1,5 @@
+{
+  "name": "DataAlchemy",
+  "description": "An intelligent data transformation and visualization workspace. Convert between CSV, Excel, and JSON formats, clean data using AI, and automatically generate insights and charts.",
+  "requestFramePermissions": []
+}
