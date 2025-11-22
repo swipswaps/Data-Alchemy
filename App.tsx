@@ -1,53 +1,60 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Download, FileJson, FileType, FileSpreadsheet, RefreshCcw, ArrowRight } from 'lucide-react';
+import { Sparkles, Download, FileJson, FileType, FileSpreadsheet, RefreshCcw, ArrowRight, Layout } from 'lucide-react';
 import { DropZone } from './components/DropZone';
 import { DataGrid } from './components/DataGrid';
 import { Visualizer } from './components/Visualizer';
 import { parseFile, exportFile } from './utils/fileHelpers';
 import { analyzeDataset } from './services/geminiService';
-import { DataSet, LoadingState, AIInsight, ChartType, DataRow } from './types';
+import { DataSet, LoadingState, AIInsight, ChartType } from './types';
 
 export default function App() {
   const [dataset, setDataset] = useState<DataSet | null>(null);
   const [loading, setLoading] = useState<LoadingState>('idle');
   const [insight, setInsight] = useState<AIInsight | null>(null);
+  const [activeSheetIdx, setActiveSheetIdx] = useState(0);
 
   const handleDataLoaded = (data: DataSet) => {
     setDataset(data);
-    setInsight(null); // Reset previous insights
+    setInsight(null);
+    setActiveSheetIdx(0);
   };
 
-  const handleDataUpdate = (newData: DataRow[]) => {
-    if (!dataset) return;
-    setDataset(prev => prev ? { ...prev, data: newData } : null);
-  };
+  const activeSheet = dataset?.sheets[activeSheetIdx];
 
   const runAnalysis = async () => {
-    if (!dataset) return;
+    if (!activeSheet) return;
     setLoading('analyzing');
     try {
-      const result = await analyzeDataset(dataset.data, dataset.columns);
+      const result = await analyzeDataset(activeSheet.data, activeSheet.columns);
       setInsight(result);
     } catch (e) {
       console.error(e);
-      alert("Failed to analyze data. Please try again.");
+      // Silent fail or toast could go here, preventing full alert spam
     } finally {
       setLoading('idle');
     }
   };
 
+  // Re-run analysis when active sheet changes
   useEffect(() => {
-    if (dataset && !insight && loading === 'idle') {
-      // Auto-analyze on load
+    if (activeSheet && !insight && loading === 'idle') {
       runAnalysis();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataset]);
+  }, [activeSheet]);
+
+  const handleSheetChange = (index: number) => {
+      if (index !== activeSheetIdx) {
+          setInsight(null); // Clear old insight
+          setActiveSheetIdx(index);
+      }
+  };
 
   const handleReset = () => {
     setDataset(null);
     setInsight(null);
     setLoading('idle');
+    setActiveSheetIdx(0);
   };
 
   return (
@@ -105,29 +112,55 @@ export default function App() {
           <div className="space-y-6 animate-fade-in">
              
              {/* Toolbar */}
-             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col md:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 bg-brand-50 rounded-full flex items-center justify-center text-brand-600 font-bold">
-                        {dataset.fileType.toUpperCase()}
+             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 w-full md:w-auto">
+                        <div className="h-10 w-10 bg-brand-50 rounded-full flex items-center justify-center text-brand-600 font-bold shrink-0">
+                            {dataset.fileType.toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                            <h3 className="font-semibold text-gray-900 truncate">{dataset.fileName}</h3>
+                            <p className="text-xs text-gray-500">
+                                {dataset.sheets.length} Sheets • {activeSheet?.data.length || 0} rows in view
+                            </p>
+                        </div>
                     </div>
-                    <div>
-                        <h3 className="font-semibold text-gray-900">{dataset.fileName}</h3>
-                        <p className="text-xs text-gray-500">{dataset.data.length} rows • {dataset.columns.length} columns</p>
+
+                    <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                        <span className="hidden md:inline text-xs font-semibold text-gray-400 uppercase tracking-wider mr-2">Export</span>
+                        <button onClick={() => exportFile(dataset, 'csv', activeSheetIdx)} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                            <FileType size={16} className="text-green-600"/> CSV
+                        </button>
+                        <button onClick={() => exportFile(dataset, 'xlsx')} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                            <FileSpreadsheet size={16} className="text-green-600"/> Excel
+                        </button>
+                        <button onClick={() => exportFile(dataset, 'json', activeSheetIdx)} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                            <FileJson size={16} className="text-yellow-600"/> JSON
+                        </button>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider mr-2">Export As</span>
-                    <button onClick={() => exportFile(dataset, 'csv')} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                        <FileType size={16} className="text-green-600"/> CSV
-                    </button>
-                    <button onClick={() => exportFile(dataset, 'xlsx')} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                        <FileSpreadsheet size={16} className="text-green-600"/> Excel
-                    </button>
-                    <button onClick={() => exportFile(dataset, 'json')} className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                        <FileJson size={16} className="text-yellow-600"/> JSON
-                    </button>
-                </div>
+                {/* Tabs */}
+                {dataset.sheets.length > 0 && (
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 custom-scrollbar border-t border-gray-100 pt-3">
+                        <Layout size={16} className="text-gray-400 mr-2 shrink-0" />
+                        {dataset.sheets.map((sheet, idx) => (
+                            <button
+                                key={sheet.name + idx}
+                                onClick={() => handleSheetChange(idx)}
+                                className={`
+                                    px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap
+                                    ${idx === activeSheetIdx 
+                                        ? 'bg-brand-100 text-brand-700 shadow-sm ring-1 ring-brand-200' 
+                                        : 'text-gray-600 hover:bg-gray-100'
+                                    }
+                                `}
+                            >
+                                {sheet.name}
+                            </button>
+                        ))}
+                    </div>
+                )}
              </div>
 
              {/* Main Grid */}
@@ -135,7 +168,12 @@ export default function App() {
                 
                 {/* Left Column: Data Table */}
                 <div className="lg:col-span-1 space-y-6">
-                   <DataGrid dataset={dataset} onDataUpdate={handleDataUpdate} />
+                    {activeSheet && (
+                         <DataGrid 
+                            data={activeSheet.data} 
+                            columns={activeSheet.columns} 
+                         />
+                    )}
                 </div>
 
                 {/* Right Column: AI Insights & Viz */}
@@ -146,10 +184,10 @@ export default function App() {
                                 <Sparkles size={48} className="text-brand-300 animate-bounce" />
                                 <div className="absolute inset-0 bg-brand-400 blur-xl opacity-20 animate-pulse rounded-full"></div>
                              </div>
-                             <h3 className="text-lg font-medium text-gray-900">AI is Analyzing your Data</h3>
-                             <p className="text-gray-500 text-sm max-w-xs">We're looking for trends, summaries, and the best way to visualize this info.</p>
+                             <h3 className="text-lg font-medium text-gray-900">AI is Analyzing {activeSheet?.name}</h3>
+                             <p className="text-gray-500 text-sm max-w-xs">We're looking for trends, summaries, and the best way to visualize this sheet.</p>
                         </div>
-                    ) : insight ? (
+                    ) : insight && activeSheet ? (
                         <div className="space-y-6">
                             {/* Insight Card */}
                             <div className="bg-gradient-to-br from-indigo-900 to-brand-900 rounded-xl shadow-lg p-6 text-white relative overflow-hidden">
@@ -158,7 +196,7 @@ export default function App() {
                                 </div>
                                 <div className="relative z-10">
                                     <h3 className="text-indigo-200 font-semibold text-sm uppercase tracking-wider mb-2 flex items-center gap-2">
-                                        <Sparkles size={14}/> AI Summary
+                                        <Sparkles size={14}/> AI Summary: {activeSheet.name}
                                     </h3>
                                     <p className="text-lg leading-relaxed font-light text-white/90">
                                         {insight.summary}
@@ -175,7 +213,7 @@ export default function App() {
                             </div>
 
                             {/* Chart */}
-                            <Visualizer insight={insight} dataset={dataset} />
+                            <Visualizer insight={insight} data={activeSheet.data} />
                         </div>
                     ) : (
                          <div className="h-[500px] bg-gray-100 rounded-xl border border-dashed border-gray-300 flex items-center justify-center text-gray-400">

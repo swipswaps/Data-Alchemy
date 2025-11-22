@@ -2,10 +2,15 @@ export interface DataRow {
   [key: string]: any;
 }
 
-export interface DataSet {
-  fileName: string;
+export interface Sheet {
+  name: string;
   columns: string[];
   data: DataRow[];
+}
+
+export interface DataSet {
+  fileName: string;
+  sheets: Sheet[];
   fileType: 'csv' | 'xlsx' | 'json';
 }
 

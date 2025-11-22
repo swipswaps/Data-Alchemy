@@ -3,22 +3,22 @@ import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
 } from 'recharts';
-import { AIInsight, ChartType, DataSet } from '../types';
+import { AIInsight, ChartType, DataRow } from '../types';
 
 interface VisualizerProps {
   insight: AIInsight;
-  dataset: DataSet;
+  data: DataRow[];
 }
 
 const COLORS = ['#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
 
-export const Visualizer: React.FC<VisualizerProps> = ({ insight, dataset }) => {
+export const Visualizer: React.FC<VisualizerProps> = ({ insight, data }) => {
   const { type, xAxisKey, dataKeys, title } = insight.suggestedChart;
   
   if (type === ChartType.NONE) return null;
 
-  // Prepare data (limit to top 20 for readability if string-based X axis)
-  const chartData = dataset.data.slice(0, 30);
+  // Prepare data (limit to top 30 for readability)
+  const chartData = data.slice(0, 30);
 
   const renderChart = () => {
     switch (type) {
@@ -91,7 +91,7 @@ export const Visualizer: React.FC<VisualizerProps> = ({ insight, dataset }) => {
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col h-[500px]">
       <div className="mb-6">
          <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
-         <p className="text-sm text-gray-500">Auto-generated based on dataset contents</p>
+         <p className="text-sm text-gray-500">Auto-generated based on sheet contents</p>
       </div>
       <div className="flex-1 w-full min-h-0">
         <ResponsiveContainer width="100%" height="100%">

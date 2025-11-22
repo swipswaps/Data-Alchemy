@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { DataSet, DataRow } from '../types';
+import { DataSet, DataRow, Sheet } from '../types';
 
 export const parseFile = async (file: File): Promise<DataSet> => {
   return new Promise((resolve, reject) => {
@@ -11,6 +11,7 @@ export const parseFile = async (file: File): Promise<DataSet> => {
         if (!data) throw new Error("File is empty");
 
         let workbook: XLSX.WorkBook;
+        const sheets: Sheet[] = [];
         
         if (file.name.endsWith('.json')) {
            const jsonData = JSON.parse(data as string);
@@ -23,29 +24,32 @@ export const parseFile = async (file: File): Promise<DataSet> => {
            workbook = XLSX.read(data, { type: 'binary' });
         }
 
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        
-        // raw: false tries to format, but true is safer for analysis usually. 
-        // We use default generic JSON conversion
-        const jsonData = XLSX.utils.sheet_to_json<DataRow>(worksheet, { defval: "" });
+        // Iterate through all sheets
+        workbook.SheetNames.forEach(sheetName => {
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json<DataRow>(worksheet, { defval: "" });
+            
+            if (jsonData.length > 0) {
+                sheets.push({
+                    name: sheetName,
+                    columns: Object.keys(jsonData[0]),
+                    data: jsonData
+                });
+            }
+        });
 
-        if (jsonData.length === 0) {
-            resolve({
-                fileName: file.name,
+        // Fallback if no valid data found
+        if (sheets.length === 0) {
+            sheets.push({
+                name: 'Sheet1',
                 columns: [],
-                data: [],
-                fileType: getFileType(file.name)
+                data: []
             });
-            return;
         }
-
-        const columns = Object.keys(jsonData[0]);
 
         resolve({
           fileName: file.name,
-          columns,
-          data: jsonData,
+          sheets,
           fileType: getFileType(file.name)
         });
 
@@ -72,25 +76,32 @@ const getFileType = (fileName: string): 'csv' | 'xlsx' | 'json' => {
     return 'xlsx';
 };
 
-export const exportFile = (dataset: DataSet, format: 'csv' | 'xlsx' | 'json') => {
+export const exportFile = (dataset: DataSet, format: 'csv' | 'xlsx' | 'json', activeSheetIndex: number = 0) => {
+    const activeSheet = dataset.sheets[activeSheetIndex];
+
     if (format === 'json') {
-        const blob = new Blob([JSON.stringify(dataset.data, null, 2)], { type: "application/json" });
+        const blob = new Blob([JSON.stringify(activeSheet.data, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
-        downloadLink(url, `${dataset.fileName.split('.')[0]}_converted.json`);
+        downloadLink(url, `${dataset.fileName.split('.')[0]}_${activeSheet.name}.json`);
         return;
     }
 
-    const worksheet = XLSX.utils.json_to_sheet(dataset.data);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
 
-    if (format === 'csv') {
+    if (format === 'xlsx') {
+        // Export all sheets for XLSX
+        dataset.sheets.forEach(sheet => {
+            const worksheet = XLSX.utils.json_to_sheet(sheet.data);
+            XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name);
+        });
+        XLSX.writeFile(workbook, `${dataset.fileName.split('.')[0]}_converted.xlsx`);
+    } else {
+        // Export only active sheet for CSV
+        const worksheet = XLSX.utils.json_to_sheet(activeSheet.data);
         const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
         const blob = new Blob([csvOutput], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
-        downloadLink(url, `${dataset.fileName.split('.')[0]}_converted.csv`);
-    } else {
-        XLSX.writeFile(workbook, `${dataset.fileName.split('.')[0]}_converted.xlsx`);
+        downloadLink(url, `${dataset.fileName.split('.')[0]}_${activeSheet.name}.csv`);
     }
 };
 
